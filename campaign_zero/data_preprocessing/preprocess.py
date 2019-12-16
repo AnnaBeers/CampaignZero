@@ -10,16 +10,20 @@ from datetime import datetime, timedelta
 from pprint import pprint
 
 
-def preprocess_nashville(input_data_folder, output_data_folder):
+def preprocess_nashville(input_data_folder, output_data_folder, 
+        period_length=180, period_start_date=datetime(2009, 1, 1),
+        period_end_date=datetime(2018, 7, 18)):
 
     force_filename = os.path.join(input_data_folder, 'nashville_use_of_force.csv')
     assigments_filename = os.path.join(input_data_folder, 'nashville_police_assignments.csv')
     complaints_filename = os.path.join(input_data_folder, 'nashville_complaints.csv')
     
     # Built-In Variables
-    community_divisions = [x + ' Precinct Division' for x in ['South', 'West', 'East', 
+    community_divisions = [x + ' Precinct Division' for x in ['South', 'West', 'East', 'North',
         'Central', 'Hermitage']] + \
         [x + ' Precinct' for x in ['Madison', 'Mid-Town Hills']]
+    all_time_periods = range(int(math.floor((period_end_date - period_start_date).days / period_length)))
+    time_period_starts = [timedelta(180 * x) + period_start_date for x in all_time_periods]
 
     # Extract employee and assingment information
     employee_dict = defaultdict(lambda: defaultdict(list))
@@ -31,31 +35,40 @@ def preprocess_nashville(input_data_folder, output_data_folder):
 
         for row in reader:
             emp_id = row[0]
+
+            # Variables to be used later.
             employee_dict[emp_id]['error'] = False
+            employee_dict[emp_id]['missing'] = False
+
+            # Initailize Complaint Counts
             employee_dict[emp_id]['complaint_count'] = 0
             employee_dict[emp_id]['civilian_complaint_count'] = 0
             employee_dict[emp_id]['complaint_count_assignment'] = 0
             employee_dict[emp_id]['civilian_complaint_count_assignment'] = 0
+            
+            # Demographic Variables
             employee_dict[emp_id]['gender'] = row[-2]
+            if row[-2] not in ['M', 'F']:
+                employee_dict[emp_id]['error'] = True
             employee_dict[emp_id]['race'] = row[-3]
+            
+            # Assignment Variables
             employee_dict[emp_id]['bureaus'] += [row[1]]
             employee_dict[emp_id]['divisions'] += [row[2]]
             employee_dict[emp_id]['sections'] += [row[3]]
-            employee_dict[emp_id]['missing'] = False
-            employee_dict[emp_id]['hire_date'] = datetime.strptime(row[-4][:-4], '%Y-%m-%d %H:%M:%S')
-            employee_dict[emp_id]['start_dates'] += [datetime.strptime(row[-6][:-4], '%Y-%m-%d %H:%M:%S')]
-            employee_dict[emp_id]['experiences'] += [(employee_dict[emp_id]['start_dates'][-1] - employee_dict[emp_id]['hire_date']).days]
-            employee_dict[emp_id]['max_experience'] = (datetime(2019, 1, 1) - employee_dict[emp_id]['hire_date']).days
+            
+            # Age Variables
             employee_dict[emp_id]['ages'] += [int(row[-1])]
-
             if int(row[-1]) > 100:
                 employee_dict[emp_id]['error'] = True
-
             if 'max_age' not in employee_dict[emp_id].keys():
                 employee_dict[emp_id]['max_age'] = int(row[-1])
             else:
                 employee_dict[emp_id]['max_age'] = max(int(row[-1]), employee_dict[emp_id]['max_age'])
 
+            # Assignment Duration Variables
+            employee_dict[emp_id]['hire_date'] = datetime.strptime(row[-4][:-4], '%Y-%m-%d %H:%M:%S')
+            employee_dict[emp_id]['start_dates'] += [datetime.strptime(row[-6][:-4], '%Y-%m-%d %H:%M:%S')]            
             end_date = row[-5][:-4]
             if end_date == '3000-01-01 00:00:00':
                 # Adjust this to time data was retrieved.
@@ -68,30 +81,41 @@ def preprocess_nashville(input_data_folder, output_data_folder):
             else:
                 employee_dict[emp_id]['end_dates'] += [datetime.strptime(row[-5][:-4], '%Y-%m-%d %H:%M:%S')]
 
-    # Derived Statistics
-    for key, item in employee_dict.items():
-        employee_dict[key]['start_date'] = employee_dict[key]['start_dates'][0]
-        employee_dict[key]['end_date'] = employee_dict[key]['end_dates'][-1]
-        employee_dict[key]['days_assigned'] = (employee_dict[key]['end_dates'][-1] - employee_dict[key]['start_dates'][0]).days + 1
-        employee_dict[key]['active'] = employee_dict[key]['end_dates'][-1].date() >= datetime(2019, 1, 1).date()
+            # Experience Variables
+            employee_dict[emp_id]['experiences'] += [(employee_dict[emp_id]['start_dates'][-1] - employee_dict[emp_id]['hire_date']).days]
+            employee_dict[emp_id]['max_experience'] = (datetime(2019, 1, 1) - employee_dict[emp_id]['hire_date']).days
+            
+    # Employee variables which require the whole employment history.
+    for emp_id, item in employee_dict.items():
+        start_date = item['start_dates'][0]
+        end_date = item['end_dates'][-1]
+        employee_dict[emp_id]['start_date'] = start_date
+        employee_dict[emp_id]['end_date'] = end_date
+        employee_dict[emp_id]['days_assigned'] = (end_date - start_date).days + 1
+
+        # Defining assignment switches.
         switches = 0
         community_switches = 0
-        for idx, section in enumerate(employee_dict[key]['sections']):
-            division = employee_dict[key]['divisions'][idx]
+        for idx, section in enumerate(item['sections']):
+            division = item['divisions'][idx]
             if idx == 0:
                 current_section = section
                 current_division = division
             else:
-                if section != current_section:
+                if division != current_division:
                     if division in community_divisions and current_division in community_divisions:
                         community_switches += 1
+                        employee_dict[emp_id]['community_switch_dates'] += [employee_dict[emp_id]['start_dates'][idx]]
                     switches += 1
-                    employee_dict[key]['switch_dates'] += [employee_dict[key]['start_dates'][idx]]
+                    employee_dict[emp_id]['switch_dates'] += [employee_dict[emp_id]['start_dates'][idx]]
                 current_section = section
-        employee_dict[key]['switches'] = switches
-        employee_dict[key]['community_switches'] = community_switches
+                current_division = division
+        employee_dict[emp_id]['switches'] = switches
+        employee_dict[emp_id]['community_switches'] = community_switches
 
-    # Create Division Change Dates
+        # Note: we can't truly know who is active, because 
+        # end dates are not well defined.
+        employee_dict[emp_id]['active'] = end_date.date() >= datetime(2019, 1, 1).date()
 
     # Extract complaint information
     complaint_dict = defaultdict(lambda: defaultdict(int))
@@ -178,8 +202,7 @@ def preprocess_nashville(input_data_folder, output_data_folder):
     with open(complaints_plus, 'w', newline='') as outfile:
         writer = csv.writer(outfile, delimiter=',')
         header = original_header + ['age', 'gender', 'race', 'bureau', 
-            'division', 'section', 'experience', 'missing',
-            'active', 'days_assigned', 
+            'division', 'section', 'experience', 'missing', 'days_assigned', 
             'complaint_count_assignment', 
             'civilian_complaint_count_assignment',
             'complaint_assignment_per_day', 'complaint_assignment_per_year',
@@ -224,10 +247,10 @@ def preprocess_nashville(input_data_folder, output_data_folder):
         header = ['emp_id', 'name', 'first_name', 'last_name', 'max_age',
             'gender', 'race', 'missing',
             'start_date', 'end_date', 'hire_date', 'max_experience', 
-            'days_assigned', 
+            'days_assigned', 'switches', 'switches_per_day',
+            'switches_per_year', 
             'community_switches', 'community_switches_per_day',
-            'community_switches_per_year', 'switches', 'switches_per_day',
-            'switches_per_year', 'complaint_count_assignment', 
+            'community_switches_per_year', 'complaint_count_assignment', 
             'civilian_complaint_count_assignment',
             'complaint_count_assignment_per_day', 
             'complaint_count_assignment_per_year',
@@ -250,11 +273,6 @@ def preprocess_nashville(input_data_folder, output_data_folder):
     model_spreadsheet = os.path.join(output_data_folder,
         'nashville_model_formatted.csv')
 
-    # Start Assignments January 1, 2009
-    # End Complaints July 18, 2018
-    period_start_date = datetime(2009, 1, 1)
-    period_end_date = datetime(2018, 7, 18)
-    period_length = 180
     time_index = 0
     gender_dict = {'F': 0, 'M': 1, ' ': 2}
     race_dict = {'A': 0, 'B': 1, 'I': 2, 'T': 3, 'W': 4, 'H': 5, ' ': 6}
@@ -266,7 +284,6 @@ def preprocess_nashville(input_data_folder, output_data_folder):
     for emp_id, item in employee_dict.items():
         if item['missing'] or item['error']:
             continue
-        # pprint(item)
         start_date = item['start_dates'][0]
         end_date = item['end_dates'][-1]
         switch_time_periods = []
@@ -275,6 +292,9 @@ def preprocess_nashville(input_data_folder, output_data_folder):
         time_periods = range(int(math.floor((start_date - period_start_date).days / period_length)),
             int(math.floor((end_date - period_start_date).days / period_length)))
 
+        # print(start_date, end_date, period_start_date, period_length)
+        # print((end_date - period_start_date).days / period_length)
+        # print(time_periods)
         for time_period in time_periods:
             if time_period > int(math.floor((period_end_date - period_start_date).days / period_length)):
                 continue
@@ -283,6 +303,7 @@ def preprocess_nashville(input_data_folder, output_data_folder):
             time_period_start = timedelta(days=period_length * time_period) + period_start_date
             previous_idx = 0
             for idx, start_date in enumerate(item['start_dates']):
+                # print(idx, start_date, time_period_start)
                 if start_date > time_period_start:
                     # pprint(item['start_dates'])
                     # print(time_period, time_period_start, start_date)
@@ -296,6 +317,8 @@ def preprocess_nashville(input_data_folder, output_data_folder):
                     model_dict[emp_id][time_period]['division'] = division_dict[division]
                     model_dict[emp_id][time_period]['age'] = item['ages'][previous_idx]
                     model_dict[emp_id][time_period]['experience'] = item['experiences'][previous_idx]
+                    model_dict[emp_id][time_period]['time_period_start'] = time_period_start
+                    model_dict[emp_id][time_period]['start_date'] = start_date
                     model_dict[emp_id]['gender'] = gender_dict[employee_dict[emp_id]['gender']]
                     model_dict[emp_id]['race'] = race_dict[employee_dict[emp_id]['race']]
                     if time_period in switch_time_periods:
@@ -304,6 +327,11 @@ def preprocess_nashville(input_data_folder, output_data_folder):
                         model_dict[emp_id][time_period]['switch'] = False
                     break
                 previous_idx = idx
+
+        # if emp_id == '109495':
+            # pprint(model_dict[emp_id])
+            # pprint(item)
+            # return
 
     for complaint_id, item in complaint_dict.items():
         emp_id = item['emp_id']
@@ -346,10 +374,20 @@ def test_analysis():
     import statsmodels.api as sm
     import pandas as pd
     pd.set_option('display.max_rows', 1000)
-    # import statsmodels.formula.api as smf
+    import statsmodels.formula.api as smf
     data = sm.datasets.get_rdataset("dietox", "geepack").data
-    pprint(data)
-    print(data.dtypes)
+    # md = smf.mixedlm("Weight ~ Feed", data, groups=data["Pig"])
+    # mdf = md.fit()
+    # print(mdf.summary())
+    # pprint(data)
+    # print(data.dtypes)
+    cop_data = pd.read_csv("../../data/processed/nashville/nashville_model_formatted.csv",
+        dtype={"complaints": float, "experience": float, 'age': float})
+    print(cop_data)
+    print(cop_data.dtypes)
+    cop_md = smf.mixedlm("complaints ~ time_period + age + experience", cop_data, groups=cop_data["police_id"])
+    cop_mdf = cop_md.fit()
+    print(cop_mdf.summary())
     return
 
 

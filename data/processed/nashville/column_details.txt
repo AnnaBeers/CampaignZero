@@ -1,0 +1,68 @@
+complaints_extended
+age - Current age calculated from assignment
+gender - Gender from assignment
+race - Race from assignment (hopefully same as complaint)
+bureau - Current bureau from assignment. Unassigned is not able to be calculated.
+division - See above
+section - See above
+experience - Days of experience since hire date in assignment spreadsheet.
+missing - Not found in assignment spreadsheet.
+days_assigned - Total days assigned in the assignment spreadseeht.
+complaint_count_assignment - All complaints counted with a known assignment.
+civilian_complaint_count_assignment - All civilian complaints counted with a known assignment.
+complaint_assignment_per_day - Complaints on assignment per day.
+complaint_assignment_per_year - See above.
+civilian_complaint_assignment_per_day - See above.
+civilian_complaint_assignment_per_year - See above.
+complaint_count - Sum of all complaints for this employee ID, whether with assignment data or not.
+civilian_complaint_count - See above.
+complaint_per_day - See above.
+complaint_per_year - See above.
+civilian_complaint_per_day - See above.
+civlian_complaint_per_year - See above.
+during_assignment - Whether this complaint was during an assignment or not.
+
+cop_details
+emp_id - Employee ID
+name - Name from complaints dataset. Assignments data doesn't have names, so if an officer has no complaints, they have no name.
+first_name - See above.
+last_name - See above.
+max_age - Age at last assignment.
+gender - From assignments data.
+race - From assignments data.
+missing - Whether this employee is missing from the assignments data.
+start_date - First starting date in assignments database. May not be the same as hire date. They seem not to have kept track of assignments until 2009.
+end_date - Final ending date. May not mean that officer is no longer employed. It's vague as to whether this means "and then they left" or "and then they continued in this assignment until this point."
+hire_date
+max_experience - Experience in days counting frmo hire_date to end_date
+days_assigned - Days on assignment from start_date to end_date
+switches - Number of times an officer switched assignment. 
+switches_per_day - See above.
+switches_per_year - See above.
+community_switches - Number of times officer switched assignment in the "Community Services Bureau" while assigned to a given precinct. For example, if they switch from the North Precinct to the South Precinct.
+community_switches_per_day - See above.
+community_switches_per_year - See above.
+complaint_count_assignment - All complaints counted with a known assignment.
+civilian_complaint_count_assignment - All civilian complaints counted with a known assignment.
+complaint_assignment_per_day - Complaints on assignment per day.
+complaint_assignment_per_year - See above.
+civilian_complaint_assignment_per_day - See above.
+civilian_complaint_assignment_per_year - See above.
+complaint_count - Sum of all complaints for this employee ID, whether with assignment data or not.
+civilian_complaint_count - See above.
+complaint_per_day - See above.
+complaint_per_year - See above.
+civilian_complaint_per_day - See above.
+civlian_complaint_per_year - See above.
+
+
+police_id - Employee ID from above.
+time_period - 6-month time period starting from January 1, 2009
+division - Precinct, coded as 0: South, 1: West, 2: East, 3: North, 4: Central, 5: Hermitage, 6: Madison, 7: Mid-Town Hills
+complaints - Number of complaints.
+race - Race, coded as 'Asian': 0, 'Black': 1, 'I?': 2, 'T?': 3, 'White': 4, 'Hispanic': 5
+gender - Gender, female 0, male 1.
+age - Age at last assignment before time period (this isn't quite right, because assignments can last multiple years, need to fix!)
+experience - Experience at last assignment before time period (see note above, this has the same error.)
+
+
