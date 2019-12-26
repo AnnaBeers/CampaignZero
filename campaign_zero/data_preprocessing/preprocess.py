@@ -12,7 +12,8 @@ from pprint import pprint
 
 def preprocess_nashville(input_data_folder, output_data_folder, 
         period_length=180, period_start_date=datetime(2009, 1, 1),
-        period_end_date=datetime(2018, 7, 18)):
+        period_end_date=datetime(2018, 7, 18),
+        only_unique_control_nums=True):
 
     force_filename = os.path.join(input_data_folder, 'nashville_use_of_force.csv')
     assigments_filename = os.path.join(input_data_folder, 'nashville_police_assignments.csv')
@@ -41,6 +42,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
             employee_dict[emp_id]['missing'] = False
 
             # Initailize Complaint Counts
+            employee_dict[emp_id]['force_count'] = 0
             employee_dict[emp_id]['complaint_count'] = 0
             employee_dict[emp_id]['civilian_complaint_count'] = 0
             employee_dict[emp_id]['complaint_count_assignment'] = 0
@@ -118,6 +120,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
         employee_dict[emp_id]['active'] = end_date.date() >= datetime(2019, 1, 1).date()
 
     # Extract complaint information
+    all_control_numbers = []
     complaint_dict = defaultdict(lambda: defaultdict(int))
     with open(complaints_filename, 'r') as openfile:
         reader = csv.reader(openfile, delimiter=',')
@@ -128,8 +131,18 @@ def preprocess_nashville(input_data_folder, output_data_folder,
             complaint_id = row[9]
             complaint_dict[complaint_id]['emp_id'] = emp_id
             complaint_dict[complaint_id]['original_data'] = row
-            employee_dict[emp_id]['first_name'] = row[4]
-            employee_dict[emp_id]['last_name'] = row[3]
+            complaint_dict[complaint_id]['complaint_origin'] = row[12]
+            control_number = row[1]
+            complaint_dict[complaint_id]['control_number'] = control_number
+            if control_number in all_control_numbers:
+                complaint_dict[complaint_id]['duplicate_control'] = True
+            else:
+                complaint_dict[complaint_id]['duplicate_control'] = False
+            complaint_dict[complaint_id]['control_number'] = control_number
+            all_control_numbers += [control_number]
+
+            employee_dict[emp_id]['first_name'] = row[4].upper()
+            employee_dict[emp_id]['last_name'] = row[3].upper()
             employee_dict[emp_id]['full_name'] = row[4] + ' ' + row[3]
             complaint_dict[complaint_id]['gender'] = employee_dict[emp_id]['gender']
             complaint_dict[complaint_id]['race'] = employee_dict[emp_id]['race']
@@ -165,6 +178,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                 employee_dict[emp_id]['complaint_count'] = 1
                 employee_dict[emp_id]['civilian_complaint_count_assignment'] = 1
                 employee_dict[emp_id]['complaint_count_assignment'] = 1
+                employee_dict[emp_id]['full_name'] = 'NA'
                 employee_dict[emp_id]['missing'] = True
             else:
                 if row[-4] == 'Citizen':
@@ -174,6 +188,39 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                 employee_dict[emp_id]['complaint_count'] += 1
                 if complaint_dict[complaint_id]['during_assignment']:
                     employee_dict[emp_id]['complaint_count_assignment'] += 1
+
+    # Employee Force Data, Not Yet Complete
+    # force_dict = {}
+    # all_incident_nums = []
+    # all_force_codes = []
+    # id_list = [emp_id for emp_id in employee_dict]
+    # last_name_list = [employee_dict[emp_id]['last_name'] for emp_id in employee_dict]
+    # with open(force_filename, 'r') as openfile:
+    #     reader = csv.reader(openfile, delimiter=',')
+    #     next(reader)
+
+    #     for row in reader:
+    #         incident_num = row[0]
+    #         force_codes = row[3:15]
+    #         cops_involved = str.split(row[-5], ';')
+    #         cops_involved = [x.strip() for x in cops_involved]
+    #         force_dict[incident_num] = {}
+    #         force_dict[incident_num]['cops_involved'] = cops_involved
+
+    #         if incident_num in all_incident_nums:
+
+    #         else:
+    #             all_incident_nums += [incident_num, force_codes]
+
+    #         for last_name in cops_involved:
+    #             last_name_indexes = [i for i, val in enumerate(last_name_list) if val == last_name]
+    #             force_emp_ids = [id_list[idx] for idx in last_name_indexes]
+    #             if len(force_emp_ids) == [1]:
+    #                 employee_dict[emp_id]['force_count'] += 1
+
+    #         print(last_name, last_name_indexes)
+
+    # return
 
     # Derived Statistics
     copy_employee_dict = employee_dict.copy()
@@ -272,12 +319,14 @@ def preprocess_nashville(input_data_folder, output_data_folder,
     # Create model spreadsheet.
     model_spreadsheet = os.path.join(output_data_folder,
         'nashville_model_formatted.csv')
+    model_spreadsheet_citizen = os.path.join(output_data_folder,
+        'nashville_model_formatted_citizen.csv')
 
     time_index = 0
     gender_dict = {'F': 0, 'M': 1, ' ': 2}
     race_dict = {'A': 0, 'B': 1, 'I': 2, 'T': 3, 'W': 4, 'H': 5, ' ': 6}
     model_header = ['police_id', 'time_period', 'division', 'complaints', 
-    'race', 'gender', 'age', 'experience']
+    'race', 'gender', 'age', 'experience', 'full_name']
     division_dict = {x: i for i, x in enumerate(community_divisions)}
     model_dict = defaultdict(lambda: defaultdict(dict))
 
@@ -292,9 +341,6 @@ def preprocess_nashville(input_data_folder, output_data_folder,
         time_periods = range(int(math.floor((start_date - period_start_date).days / period_length)),
             int(math.floor((end_date - period_start_date).days / period_length)))
 
-        # print(start_date, end_date, period_start_date, period_length)
-        # print((end_date - period_start_date).days / period_length)
-        # print(time_periods)
         for time_period in time_periods:
             if time_period > int(math.floor((period_end_date - period_start_date).days / period_length)):
                 continue
@@ -303,17 +349,13 @@ def preprocess_nashville(input_data_folder, output_data_folder,
             time_period_start = timedelta(days=period_length * time_period) + period_start_date
             previous_idx = 0
             for idx, start_date in enumerate(item['start_dates']):
-                # print(idx, start_date, time_period_start)
                 if start_date > time_period_start:
-                    # pprint(item['start_dates'])
-                    # print(time_period, time_period_start, start_date)
-                    # pprint(item['divisions'])
-                    # print(previous_idx)
                     division = item['divisions'][previous_idx]
                     if division not in community_divisions:
                         break
                     model_dict[emp_id][time_period] = defaultdict(int)
                     model_dict[emp_id][time_period]['complaints'] = 0
+                    model_dict[emp_id][time_period]['civilian_complaints'] = 0
                     model_dict[emp_id][time_period]['division'] = division_dict[division]
                     model_dict[emp_id][time_period]['age'] = item['ages'][previous_idx]
                     model_dict[emp_id][time_period]['experience'] = item['experiences'][previous_idx]
@@ -321,17 +363,13 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                     model_dict[emp_id][time_period]['start_date'] = start_date
                     model_dict[emp_id]['gender'] = gender_dict[employee_dict[emp_id]['gender']]
                     model_dict[emp_id]['race'] = race_dict[employee_dict[emp_id]['race']]
+                    model_dict[emp_id]['full_name'] = employee_dict[emp_id]['full_name']
                     if time_period in switch_time_periods:
                         model_dict[emp_id][time_period]['switch'] = True
                     else:
                         model_dict[emp_id][time_period]['switch'] = False
                     break
                 previous_idx = idx
-
-        # if emp_id == '109495':
-            # pprint(model_dict[emp_id])
-            # pprint(item)
-            # return
 
     for complaint_id, item in complaint_dict.items():
         emp_id = item['emp_id']
@@ -345,26 +383,36 @@ def preprocess_nashville(input_data_folder, output_data_folder,
         time_period = int(math.floor((date - period_start_date).days / period_length))
         if time_period not in model_dict[emp_id].keys():
             continue
-        model_dict[emp_id][time_period]['complaints'] += 1
+        if not item['duplicate_control']:
+            if item['complaint_origin'] == 'Citizen':
+                model_dict[emp_id][time_period]['civilian_complaints'] += 1
+            model_dict[emp_id][time_period]['complaints'] += 1
 
-    with open(model_spreadsheet, 'w', newline='') as outfile:
+    with open(model_spreadsheet, 'w', newline='') as outfile, \
+            open(model_spreadsheet_citizen, 'w', newline='') as outfile_citizen, \
+            open(model_spreadsheet_citizen_sustained, 'w', newline='') as outfile_citizen:
         writer = csv.writer(outfile, delimiter=',')
         writer.writerow(model_header)
+        writer_citizen = csv.writer(outfile_citizen, delimiter=',')
+        writer_citizen.writerow(model_header)
         for emp_id, emp_dict in model_dict.items():
             for time_period, time_dict in emp_dict.items():
-                # pprint(emp_dict)
-                # pprint(time_dict)
                 if emp_id == [' ']:
                     continue
-                if time_period in ['gender', 'race']:
+                if time_period in ['gender', 'race', 'full_name']:
                     continue
                 if time_dict['switch']:
                     continue
                 output_row = [emp_id, time_period, time_dict['division'],
                     time_dict['complaints'], emp_dict['race'],
                     emp_dict['gender'], time_dict['age'],
-                    time_dict['experience']]
+                    time_dict['experience'], emp_dict['full_name']]
                 writer.writerow(output_row)
+                output_row = [emp_id, time_period, time_dict['division'],
+                    time_dict['civilian_complaints'], emp_dict['race'],
+                    emp_dict['gender'], time_dict['age'],
+                    time_dict['experience'], emp_dict['full_name']]
+                writer_citizen.writerow(output_row)
 
     return
 
