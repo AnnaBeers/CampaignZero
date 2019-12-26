@@ -18,7 +18,7 @@ require(DHARMa)
 options(scipen=999)
 
 # Load Data
-model_data = read.csv("[users]/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted_citizen.csv")
+model_data = read.csv("C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted_citizen.csv")
 
 # Change Data Types and Normalize
 model_data$police_id = as.factor(model_data$police_id)
@@ -95,10 +95,11 @@ time_period_level_data$residual_randomeffect = time_period_level_data$residual +
 time_period_level_data$condsd_transformed = exp(time_period_level_data$condsd)
 time_period_level_data$predictions_transformed = exp(time_period_level_data$predictions)
 time_period_level_data$full_name = model_data$full_name
+time_period_level_data$force_count = model_data$force_count
 colnames(time_period_level_data)[1] = "police_id"
 
-cop_level_data = aggregate(time_period_level_data[, 2:14], list(time_period_level_data$police_id), mean)
-names = aggregate(full_name~police_id, data=time_period_level_data, paste) # I don't know how to do this better. Something with dplyr would work.
+cop_level_data = aggregate(time_period_level_data[, 2:15], list(time_period_level_data$police_id), mean)
+names = aggregate(full_name~police_id, data=time_period_level_data, paste, collapse = ",") # I don't know how to do this better. Something with dplyr would work.
 residual_sd = aggregate(time_period_level_data$residual, list(time_period_level_data$police_id), sd)
 cop_level_data = merge(cop_level_data, residual_sd, by.y="Group.1", by.x="Group.1")
 cop_level_data = merge(cop_level_data, names, by.x="Group.1", by.y="police_id")
@@ -113,14 +114,26 @@ cop_level_data$reliability = 1 / sqrt(cop_level_data$condsd)
 cop_level_data$shrunken_metric = cop_level_data$condval * cop_level_data$reliability
 cop_level_data$shrunken_metric2 = cop_level_data$residual_randomeffect * cop_level_data$reliability
 
+# Scratch for Force Prediction, not finished.
+cop_level_data$s1_time_adjusted = cop_level_data$shrunken_metric * cop_level_data$n
+cop_level_data$s2_time_adjusted = cop_level_data$shrunken_metric2 * cop_level_data$n
+cop_level_data$force_time_adjusted = cop_level_data$force_count / cop_level_data$n
+cops_with_force = cop_level_data[cop_level_data$force_count > 0,]
+force_model1 <- glmmTMB(force_count ~ s1_time_adjusted, data = cops_with_force, family=nbinom1(), verbose=2)
+force_model2 <- glmmTMB(force_count ~ s2_time_adjusted, data = cops_with_force, family=nbinom1(), verbose=2)
+force_model3 <- glmmTMB(force_time_adjusted ~ shrunken_metric, data = cops_with_force, family=nbinom1(), verbose=2)
+force_model4 <- glmmTMB(force_time_adjusted ~ shrunken_metric2, data = cops_with_force, family=nbinom1(), verbose=2)
+cops_with_force$force_predictions = exp(predict(force_model1))
+ggplot(cops_with_force, aes(x=force_predictions, y=force_count)) + geom_point() + geom_abline()
+
 # Save out results..
-write.csv(time_period_level_data, file = "[users]/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_time_period_results.csv")
-write.csv(cop_level_data, file = "[users]/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_police_id_results.csv")
+write.csv(time_period_level_data, file = "C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_time_period_results.csv")
+write.csv(cop_level_data, file = "C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_police_id_results.csv")
 
 # Scratch Code
 predictions = predict(output_model, se.fit=TRUE)
+ggplot(cop_level_data) + geom_histogram(aes(s2_time_adjusted))
 ggplot(cop_level_data) + geom_histogram(aes(shrunken_metric))
-ggplot(cop_level_data) + geom_histogram(aes(shrunken_metric2))
 ggplot(cop_level_data, aes(x=condval, y=shrunken_metric)) + geom_point() + geom_abline()
 ggplot(time_period_level_data) + geom_histogram(aes(residual_randomeffect), binwidth=.1)
 ggplot(random_effects) + geom_histogram(aes(condval))
