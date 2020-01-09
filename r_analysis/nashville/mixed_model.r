@@ -18,7 +18,7 @@ require(DHARMa)
 options(scipen=999)
 
 # Load Data
-model_data = read.csv("C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted_citizen.csv")
+model_data = read.csv("C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted.csv")
 
 # Change Data Types and Normalize
 model_data$police_id = as.factor(model_data$police_id)
@@ -66,7 +66,8 @@ if (chosen_distribution == "poisson"){
 if (chosen_distribution == 'negative_binomial'){
   # My initial attempts at model comparisons via AIC indicate that division + time_period + experience is where model performance maxes out. The time_period parameter looks supicious though, because none of the fixed effects coefficients are significant, and the coefficients are very large. So, TBD! Someone with more stats experience can look into it.
   output_model <- glmmTMB(complaints ~ division + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
-  output_model_alternate <- glmmTMB(complaints ~ division + time_period + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+  # output_model_time_period <- glmmTMB(complaints ~ division + time_period + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+  output_model_race <- glmmTMB(complaints ~ division + experience + race + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
 }
 if (chosen_distribution == "normal"){
   output_model_normal <- glmmTMB(complaints ~ time_period + division + experience + race +(1 | police_id), data = model_data, family=gaussian(), verbose=2)
@@ -121,9 +122,8 @@ cop_level_data$force_time_adjusted = cop_level_data$force_count / cop_level_data
 cops_with_force = cop_level_data[cop_level_data$force_count > 0,]
 force_model1 <- glmmTMB(force_count ~ s1_time_adjusted, data = cops_with_force, family=nbinom1(), verbose=2)
 force_model2 <- glmmTMB(force_count ~ s2_time_adjusted, data = cops_with_force, family=nbinom1(), verbose=2)
-force_model3 <- glmmTMB(force_time_adjusted ~ shrunken_metric, data = cops_with_force, family=nbinom1(), verbose=2)
-force_model4 <- glmmTMB(force_time_adjusted ~ shrunken_metric2, data = cops_with_force, family=nbinom1(), verbose=2)
 cops_with_force$force_predictions = exp(predict(force_model1))
+cops_with_force$force_predictions2 = exp(predict(force_model2))
 ggplot(cops_with_force, aes(x=force_predictions, y=force_count)) + geom_point() + geom_abline()
 
 # Save out results..
@@ -131,7 +131,6 @@ write.csv(time_period_level_data, file = "C:/Users/abeers/Documents/Projects/Cam
 write.csv(cop_level_data, file = "C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_police_id_results.csv")
 
 # Scratch Code
-predictions = predict(output_model, se.fit=TRUE)
 ggplot(cop_level_data) + geom_histogram(aes(s2_time_adjusted))
 ggplot(cop_level_data) + geom_histogram(aes(shrunken_metric))
 ggplot(cop_level_data, aes(x=condval, y=shrunken_metric)) + geom_point() + geom_abline()

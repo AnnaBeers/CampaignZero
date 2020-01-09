@@ -17,7 +17,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
 
     force_filename = os.path.join(input_data_folder, 'nashville_use_of_force.csv')
     assigments_filename = os.path.join(input_data_folder, 'nashville_police_assignments.csv')
-    complaints_filename = os.path.join(input_data_folder, 'nashville_complaints.csv')
+    allegations_filename = os.path.join(input_data_folder, 'nashville_allegations.csv')
     
     # Built-In Variables
     community_divisions = [x + ' Precinct Division' for x in ['South', 'West', 'East', 'North',
@@ -43,10 +43,10 @@ def preprocess_nashville(input_data_folder, output_data_folder,
 
             # Initailize Complaint Counts
             employee_dict[emp_id]['force_count'] = 0
-            employee_dict[emp_id]['complaint_count'] = 0
-            employee_dict[emp_id]['civilian_complaint_count'] = 0
-            employee_dict[emp_id]['complaint_count_assignment'] = 0
-            employee_dict[emp_id]['civilian_complaint_count_assignment'] = 0
+            employee_dict[emp_id]['allegation_count'] = 0
+            employee_dict[emp_id]['civilian_allegation_count'] = 0
+            employee_dict[emp_id]['allegation_count_assignment'] = 0
+            employee_dict[emp_id]['civilian_allegation_count_assignment'] = 0
             
             # Demographic Variables
             employee_dict[emp_id]['gender'] = row[-2]
@@ -119,78 +119,78 @@ def preprocess_nashville(input_data_folder, output_data_folder,
         # end dates are not well defined.
         employee_dict[emp_id]['active'] = end_date.date() >= datetime(2019, 1, 1).date()
 
-    # Extract complaint information
+    # Extract allegation information
     all_control_numbers = []
-    complaint_dict = defaultdict(lambda: defaultdict(int))
-    with open(complaints_filename, 'r') as openfile:
+    allegation_dict = defaultdict(lambda: defaultdict(int))
+    with open(allegations_filename, 'r') as openfile:
         reader = csv.reader(openfile, delimiter=',')
         original_header = next(reader)
 
         for row in reader:
             emp_id = row[6]
-            complaint_id = row[9]
-            complaint_dict[complaint_id]['emp_id'] = emp_id
-            complaint_dict[complaint_id]['original_data'] = row
-            complaint_dict[complaint_id]['complaint_origin'] = row[12]
+            allegation_id = row[9]
+            allegation_dict[allegation_id]['emp_id'] = emp_id
+            allegation_dict[allegation_id]['original_data'] = row
+            allegation_dict[allegation_id]['allegation_origin'] = row[12]
             control_number = row[1]
-            complaint_dict[complaint_id]['control_number'] = control_number
+            allegation_dict[allegation_id]['control_number'] = control_number
             if control_number in all_control_numbers:
-                complaint_dict[complaint_id]['duplicate_control'] = True
+                allegation_dict[allegation_id]['duplicate_control'] = True
             else:
-                complaint_dict[complaint_id]['duplicate_control'] = False
-            complaint_dict[complaint_id]['control_number'] = control_number
+                allegation_dict[allegation_id]['duplicate_control'] = False
+            allegation_dict[allegation_id]['control_number'] = control_number
             all_control_numbers += [control_number]
 
             employee_dict[emp_id]['first_name'] = row[4].upper()
             employee_dict[emp_id]['last_name'] = row[3].upper()
             employee_dict[emp_id]['full_name'] = row[4] + ' ' + row[3]
-            complaint_dict[complaint_id]['gender'] = employee_dict[emp_id]['gender']
-            complaint_dict[complaint_id]['race'] = employee_dict[emp_id]['race']
+            allegation_dict[allegation_id]['gender'] = employee_dict[emp_id]['gender']
+            allegation_dict[allegation_id]['race'] = employee_dict[emp_id]['race']
             date = datetime.strptime(row[2], '%B %d, %Y')
-            complaint_dict[complaint_id]['date'] = date
+            allegation_dict[allegation_id]['date'] = date
 
             previous_end_date = datetime(1900, 1, 1)
             time_fields = ['bureau', 'division', 'section', 'age', 'experience']
             for date_index, end_date in enumerate(employee_dict[emp_id]['end_dates']):
                 if date_index == 0 and date < end_date:
                     for field in time_fields:
-                        complaint_dict[complaint_id][field] = 'Unassigned'
-                    complaint_dict[complaint_id]['during_assignment'] = False
+                        allegation_dict[allegation_id][field] = 'Unassigned'
+                    allegation_dict[allegation_id]['during_assignment'] = False
                     break
                 if date <= end_date and date > previous_end_date:
                     for field in time_fields:
-                        complaint_dict[complaint_id][field] = employee_dict[emp_id][field + 's'][date_index]
-                    complaint_dict[complaint_id]['during_assignment'] = True
+                        allegation_dict[allegation_id][field] = employee_dict[emp_id][field + 's'][date_index]
+                    allegation_dict[allegation_id]['during_assignment'] = True
                     break
                 if date_index == len(employee_dict[emp_id]['end_dates']) - 1:
                     for field in time_fields:
-                        complaint_dict[complaint_id][field] = employee_dict[emp_id][field + 's'][-1]
-                    complaint_dict[complaint_id]['during_assignment'] = False
+                        allegation_dict[allegation_id][field] = employee_dict[emp_id][field + 's'][-1]
+                    allegation_dict[allegation_id]['during_assignment'] = False
                     break
                 previous_end_date = end_date
 
             for key in ['bureau', 'division', 'section']:
-                if key not in complaint_dict[complaint_id].keys():
-                    complaint_dict[complaint_id][key] = ''
+                if key not in allegation_dict[allegation_id].keys():
+                    allegation_dict[allegation_id][key] = ''
 
-            if 'complaint_count' not in employee_dict[emp_id]:
-                employee_dict[emp_id]['civilian_complaint_count'] = 1
-                employee_dict[emp_id]['complaint_count'] = 1
-                employee_dict[emp_id]['civilian_complaint_count_assignment'] = 1
-                employee_dict[emp_id]['complaint_count_assignment'] = 1
+            if 'allegation_count' not in employee_dict[emp_id]:
+                employee_dict[emp_id]['civilian_allegation_count'] = 1
+                employee_dict[emp_id]['allegation_count'] = 1
+                employee_dict[emp_id]['civilian_allegation_count_assignment'] = 1
+                employee_dict[emp_id]['allegation_count_assignment'] = 1
                 employee_dict[emp_id]['full_name'] = 'NA'
                 employee_dict[emp_id]['force_count'] = 0
                 employee_dict[emp_id]['missing'] = True
             else:
                 if row[-4] == 'Citizen':
-                    employee_dict[emp_id]['civilian_complaint_count'] += 1
-                    if complaint_dict[complaint_id]['during_assignment']:
-                        employee_dict[emp_id]['civilian_complaint_count_assignment'] += 1
-                employee_dict[emp_id]['complaint_count'] += 1
-                if complaint_dict[complaint_id]['during_assignment']:
-                    employee_dict[emp_id]['complaint_count_assignment'] += 1
+                    employee_dict[emp_id]['civilian_allegation_count'] += 1
+                    if allegation_dict[allegation_id]['during_assignment']:
+                        employee_dict[emp_id]['civilian_allegation_count_assignment'] += 1
+                employee_dict[emp_id]['allegation_count'] += 1
+                if allegation_dict[allegation_id]['during_assignment']:
+                    employee_dict[emp_id]['allegation_count_assignment'] += 1
 
-    # Employee Force Data, Not Yet Complete
+    # Employee Force Data, Not Yet Completed, could have errors.
     force_dict = {}
     all_incident_nums = []
     all_force_codes = []
@@ -240,46 +240,46 @@ def preprocess_nashville(input_data_folder, output_data_folder,
     copy_employee_dict = employee_dict.copy()
     for key, item in copy_employee_dict.items():
         if employee_dict[key]['missing']:
-            for field in ['complaint_per_day', 'civilian_complaint_per_day',
-                    'civilian_complaint_per_year', 'complaint_per_year',
-                    'complaint_assignment_per_day', 
-                    'complaint_assignment_per_year',
-                    'civilian_complaint_assignment_per_day',
-                    'civilian_complaint_assignment_per_year']:
+            for field in ['allegation_per_day', 'civilian_allegation_per_day',
+                    'civilian_allegation_per_year', 'allegation_per_year',
+                    'allegation_assignment_per_day', 
+                    'allegation_assignment_per_year',
+                    'civilian_allegation_assignment_per_day',
+                    'civilian_allegation_assignment_per_year']:
                 employee_dict[key][field] = 'null'
         else:
-            for metric in ['complaint_count', 'civilian_complaint_count', 
-                    'complaint_count_assignment', 
-                    'civilian_complaint_count_assignment', 'switches',
+            for metric in ['allegation_count', 'civilian_allegation_count', 
+                    'allegation_count_assignment', 
+                    'civilian_allegation_count_assignment', 'switches',
                     'community_switches']:
                 employee_dict[key][f'{metric}_per_day'] = employee_dict[key][metric] / employee_dict[key]['days_assigned']
                 employee_dict[key][f'{metric}_per_year'] = employee_dict[key][f'{metric}_per_day'] * 365
     del(copy_employee_dict)
 
-    # Create extended complaints
-    complaints_plus = os.path.join(output_data_folder, 
-        'nashville_complaints_extended.csv')
-    with open(complaints_plus, 'w', newline='') as outfile:
+    # Create extended allegations
+    allegations_plus = os.path.join(output_data_folder, 
+        'nashville_allegations_extended.csv')
+    with open(allegations_plus, 'w', newline='') as outfile:
         writer = csv.writer(outfile, delimiter=',')
-        complaint_header = ['age', 'gender', 'race', 'bureau', 
-            'division', 'section', 'experience', 'during_assignment']
+        allegation_header = ['duplicate_control', 'age', 'gender', 'race', 'bureau', 
+            'division', 'section', 'experience', 'during_assignment',]
         employee_header = ['missing', 'days_assigned', 'force_count',
-            'complaint_count_assignment', 
-            'civilian_complaint_count_assignment',
-            'complaint_assignment_per_day', 'complaint_assignment_per_year',
-            'civilian_complaint_assignment_per_day',
-            'civilian_complaint_assignment_per_year',
-            'complaint_count', 
-            'civilian_complaint_count', 'complaint_per_day', 
-            'complaint_per_year', 'civilian_complaint_per_day', 
-            'civlian_complaint_per_year', 'during_assignment']
-        header = original_header + complaint_header + employee_header
+            'allegation_count_assignment', 
+            'civilian_allegation_count_assignment',
+            'allegation_assignment_per_day', 'allegation_assignment_per_year',
+            'civilian_allegation_assignment_per_day',
+            'civilian_allegation_assignment_per_year',
+            'allegation_count', 
+            'civilian_allegation_count', 'allegation_per_day', 
+            'allegation_per_year', 'civilian_allegation_per_day', 
+            'civlian_allegation_per_year', 'during_assignment']
+        header = original_header + allegation_header + employee_header
         writer.writerow(header)
 
-        for complaint_id, item in complaint_dict.items():
+        for allegation_id, item in allegation_dict.items():
             emp_id = item['emp_id']
             output_row = item['original_data']
-            output_row += [item[key] for key in complaint_header]
+            output_row += [item[key] for key in allegation_header]
             output_row += [employee_dict[emp_id][key] for key in employee_header]
             writer.writerow(output_row)
 
@@ -296,17 +296,17 @@ def preprocess_nashville(input_data_folder, output_data_folder,
             'switches_per_year', 
             'community_switches', 'community_switches_per_day',
             'community_switches_per_year', 'force_count',
-            'complaint_count_assignment', 
-            'civilian_complaint_count_assignment',
-            'complaint_count_assignment_per_day', 
-            'complaint_count_assignment_per_year',
-            'civilian_complaint_count_assignment_per_day',
-            'civilian_complaint_count_assignment_per_year',
-            'complaint_count',
-            'civilian_complaint_count', 'complaint_count_per_day', 
-            'complaint_count_per_year',
-            'civilian_complaint_count_per_day', 
-            'civilian_complaint_count_per_year']
+            'allegation_count_assignment', 
+            'civilian_allegation_count_assignment',
+            'allegation_count_assignment_per_day', 
+            'allegation_count_assignment_per_year',
+            'civilian_allegation_count_assignment_per_day',
+            'civilian_allegation_count_assignment_per_year',
+            'allegation_count',
+            'civilian_allegation_count', 'allegation_count_per_day', 
+            'allegation_count_per_year',
+            'civilian_allegation_count_per_day', 
+            'civilian_allegation_count_per_year']
         writer.writerow(header)
 
         for emp_id, item in employee_dict.items():
@@ -326,7 +326,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
     time_index = 0
     gender_dict = {'F': 0, 'M': 1, ' ': 2}
     race_dict = {'A': 0, 'B': 1, 'I': 2, 'T': 3, 'W': 4, 'H': 5, ' ': 6}
-    model_header = ['police_id', 'time_period', 'division', 'complaints', 
+    model_header = ['police_id', 'time_period', 'division', 'allegations', 
     'race', 'gender', 'age', 'experience', 'full_name', 'force_count']
     division_dict = {x: i for i, x in enumerate(community_divisions)}
     model_dict = defaultdict(lambda: defaultdict(dict))
@@ -355,8 +355,8 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                     if division not in community_divisions:
                         break
                     model_dict[emp_id][time_period] = defaultdict(int)
-                    model_dict[emp_id][time_period]['complaints'] = 0
-                    model_dict[emp_id][time_period]['civilian_complaints'] = 0
+                    model_dict[emp_id][time_period]['allegations'] = 0
+                    model_dict[emp_id][time_period]['civilian_allegations'] = 0
                     model_dict[emp_id][time_period]['division'] = division_dict[division]
                     model_dict[emp_id][time_period]['age'] = item['ages'][previous_idx]
                     model_dict[emp_id][time_period]['experience'] = item['experiences'][previous_idx]
@@ -373,7 +373,7 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                     break
                 previous_idx = idx
 
-    for complaint_id, item in complaint_dict.items():
+    for allegation_id, item in allegation_dict.items():
         emp_id = item['emp_id']
         date = item['date']
         if employee_dict[emp_id]['missing']:
@@ -386,9 +386,9 @@ def preprocess_nashville(input_data_folder, output_data_folder,
         if time_period not in model_dict[emp_id].keys():
             continue
         if not item['duplicate_control']:
-            if item['complaint_origin'] == 'Citizen':
-                model_dict[emp_id][time_period]['civilian_complaints'] += 1
-            model_dict[emp_id][time_period]['complaints'] += 1
+            if item['allegation_origin'] == 'Citizen':
+                model_dict[emp_id][time_period]['civilian_allegations'] += 1
+            model_dict[emp_id][time_period]['allegations'] += 1
 
     with open(model_spreadsheet, 'w', newline='') as outfile, \
             open(model_spreadsheet_citizen, 'w', newline='') as outfile_citizen:
@@ -406,12 +406,12 @@ def preprocess_nashville(input_data_folder, output_data_folder,
                 if time_dict['switch']:
                     continue
                 output_row = [emp_id, time_period, time_dict['division'],
-                    time_dict['complaints'], emp_dict['race'],
+                    time_dict['allegations'], emp_dict['race'],
                     emp_dict['gender'], time_dict['age'],
                     time_dict['experience'], emp_dict['full_name'], emp_dict['force_count']]
                 writer.writerow(output_row)
                 output_row = [emp_id, time_period, time_dict['division'],
-                    time_dict['civilian_complaints'], emp_dict['race'],
+                    time_dict['civilian_allegations'], emp_dict['race'],
                     emp_dict['gender'], time_dict['age'],
                     time_dict['experience'], emp_dict['full_name'], emp_dict['force_count']]
                 writer_citizen.writerow(output_row)
@@ -432,10 +432,10 @@ def test_analysis():
     # pprint(data)
     # print(data.dtypes)
     cop_data = pd.read_csv("../../data/processed/nashville/nashville_model_formatted.csv",
-        dtype={"complaints": float, "experience": float, 'age': float})
+        dtype={"allegations": float, "experience": float, 'age': float})
     print(cop_data)
     print(cop_data.dtypes)
-    cop_md = smf.mixedlm("complaints ~ time_period + age + experience", cop_data, groups=cop_data["police_id"])
+    cop_md = smf.mixedlm("allegations ~ time_period + age + experience", cop_data, groups=cop_data["police_id"])
     cop_mdf = cop_md.fit()
     print(cop_mdf.summary())
     return
