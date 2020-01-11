@@ -18,7 +18,7 @@ require(DHARMa)
 options(scipen=999)
 
 # Load Data
-model_data = read.csv("C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted.csv")
+model_data = read.csv("C:/Users/abeers/Documents/Projects/CampaignZero/CPZ/data/processed/nashville/nashville_model_formatted_citizen.csv")
 
 # Change Data Types and Normalize
 model_data$police_id = as.factor(model_data$police_id)
@@ -29,49 +29,41 @@ model_data$time_period = as.factor(model_data$time_period)
 model_data$full_name = as.factor(model_data$full_name)
 model_data$age = (model_data$age - mean(model_data$age)) / sd(model_data$age)
 model_data$experience = (model_data$experience - mean(model_data$experience)) / sd(model_data$experience)
-model_data = model_data[!(model_data$time_period == 19),]
+model_data$allegations.nonzero = model_data$allegations + 1
+model_data = model_data[!(model_data$time_period == 19),] # Almost no data in this time period. Possible error in preprocessing.
 
 # Check Data is loaded correctly.
 head(model_data)
 
-# Determine Distribution of Data. Not working right now, work in progress.
-  # Make complaint data non-zero if necessary for distribution.
-  model_data$complaints.nonzero = model_data$complaints + 1
-  # Normal
-  qqp(model_data$complaints, "norm")
-  # Log Normal
-  qqp(model_data$complaints, "lnorm")
-  # Negative Binomial
-  nbinom <- fitdistr(model_data$complaints, "Negative Binomial")
-  qqp(model_data$complaints, "nbinom", size = nbinom$estimate[[1]], mu = nbinom$estimate[[2]])
-  # Poisson
-  filtered_complaints = model_data[model_data$complaints <= 5, ]
-  filtered_poisson = fitdistr(filtered_complaints$complaints, "Poisson")
-  poisson_dist <- fitdistr(model_data$complaints, "Poisson")
-  qqp(model_data$complaints, "pois", lambda=poisson_dist$estimate)
-  # Gamma
-  gamma <- fitdistr(model_data$complaints.nonzero, "gamma")
-  qqp(model_data$complaints.nonzero, "gamma", shape = gamma$estimate[[1]], rate = gamma$estimate[[2]])
+# Determine Distribution of Data.
+fitn <- fitdist(model_data$allegations, "norm")
+fitp <- fitdist(model_data$allegations, "pois")
+fitnb <- fitdist(model_data$allegations, "nbinom")
+denscomp(list(fitn, fitp, fitnb), main="Comparison of Distribution Fit for Allegations Data")
 chosen_distribution = "negative_binomial"
   
 # Visualize Data Histogram
-ggplot(model_data) +
-  geom_histogram(aes(complaints, y = ..density..), binwidth = 1)
+ggplot(model_data) + geom_histogram(aes(allegations, y = ..density..), binwidth = 1)
 
-# Run Model
-if (chosen_distribution == "poisson"){
-  output_model_p <- glmmTMB(complaints ~ time_period + division + (1 | police_id), data = model_data, family=poisson(), ziformula=~1, verbose=2)
-  output_model = output_model_p
-}
-if (chosen_distribution == 'negative_binomial'){
-  # My initial attempts at model comparisons via AIC indicate that division + time_period + experience is where model performance maxes out. The time_period parameter looks supicious though, because none of the fixed effects coefficients are significant, and the coefficients are very large. So, TBD! Someone with more stats experience can look into it.
-  output_model <- glmmTMB(complaints ~ division + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
-  # output_model_time_period <- glmmTMB(complaints ~ division + time_period + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
-  output_model_race <- glmmTMB(complaints ~ division + experience + race + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
-}
-if (chosen_distribution == "normal"){
-  output_model_normal <- glmmTMB(complaints ~ time_period + division + experience + race +(1 | police_id), data = model_data, family=gaussian(), verbose=2)
-  }
+# Compare Models by Distribution, No Controls
+output_model_normal <- glmmTMB(allegations ~ (1 | police_id), data = model_data, family=gaussian(), verbose=2)
+output_model_p <- glmmTMB(allegations ~ (1 | police_id), data = model_data, family=poisson(), ziformula=~1, verbose=2)
+output_model_nb <- glmmTMB(allegations ~ (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+
+# Compare Models by Controls
+# We take the best model from the previous section. We don't exhaustively check every combination, but use some intuition to add them sequentially.
+output_model <- glmmTMB(allegations ~ (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_division <- glmmTMB(allegations ~ division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_time_period <- glmmTMB(allegations ~ time_period + division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_experience <- glmmTMB(allegations ~ experience + time_period + division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_race <- glmmTMB(allegations ~ race + experience + time_period + division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_gender <- glmmTMB(allegations ~ gender + race + experience + time_period + division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+output_model_age <- glmmTMB(allegations ~ age + gender + race + experience + time_period + division + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+
+# My initial attempts at model comparisons via AIC indicate that division + time_period + experience is where model performance maxes out. The time_period parameter looks supicious though, because none of the fixed effects coefficients are significant, and the coefficients are very large. So, TBD! Someone with more stats experience can look into it.
+  output_model_p <- glmmTMB(allegations ~ time_period + division + (1 | police_id), data = model_data, family=poisson(), ziformula=~1, verbose=2)
+  output_model <- glmmTMB(allegations ~ division + experience + (1 | police_id), data = model_data, family=nbinom1(), verbose=2)
+  output_model_normal <- glmmTMB(allegations ~ time_period + division + experience + race +(1 | police_id), data = model_data, family=gaussian(), verbose=2)
 
 # View Model Summary
 summary(output_model)
@@ -81,7 +73,7 @@ Anova(output_model)
 
 # Model Diagnostics. For more information, see https://cran.r-project.org/web/packages/DHARMa/vignettes/DHARMa.html.
 res <- simulateResiduals(output_model)
-plotResiduals(model_data$complaints, res$scaledResiduals)
+plotResiduals(model_data$allegations, res$scaledResiduals)
 plot(res)
 testResiduals(res)
 testZeroInflation(res)
@@ -90,7 +82,7 @@ testZeroInflation(res)
 # This is a little messy.
 random_effects = data.frame(ranef(output_model))
 random_effects$n = count(model_data, police_id)$n
-time_period_level_data = data.frame("police_id" = model_data$police_id, "residual" = resid(output_model), "predictions"=predict(output_model), "complaints"=model_data$complaints)
+time_period_level_data = data.frame("police_id" = model_data$police_id, "residual" = resid(output_model), "predictions"=predict(output_model), "allegations"=model_data$allegations)
 time_period_level_data = merge(random_effects, time_period_level_data, by.x="grp", by.y="police_id")
 time_period_level_data$residual_randomeffect = time_period_level_data$residual + exp(time_period_level_data$condval)
 time_period_level_data$condsd_transformed = exp(time_period_level_data$condsd)
@@ -139,5 +131,5 @@ ggplot(random_effects) + geom_histogram(aes(condval))
 qqp(police_residuals, "norm")
 gamma <- fitdistr(police_residuals, "gamma")
 qqp(police_residuals, "gamma", shape = gamma$estimate[[1]], rate = gamma$estimate[[2]])
-# output_model <- glmer(complaints ~ time_period + division + age + experience + race + gender + (1 | police_id), data = model_data, family = poisson(link = "log"), nAGQ = 1, control=glmerControl(optimizer = "nloptwrap"), verbose=2)  # Set nAGQ to # of desired iterations
-# output_model = MCMCglmm(complaints ~ time_period + division + age + experience + race + gender, random = ~police_id, data = model_data)
+# output_model <- glmer(allegations ~ time_period + division + age + experience + race + gender + (1 | police_id), data = model_data, family = poisson(link = "log"), nAGQ = 1, control=glmerControl(optimizer = "nloptwrap"), verbose=2)  # Set nAGQ to # of desired iterations
+# output_model = MCMCglmm(allegations ~ time_period + division + age + experience + race + gender, random = ~police_id, data = model_data)
